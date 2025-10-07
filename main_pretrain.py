@@ -49,6 +49,10 @@ def get_args_parser():
 
     parser.add_argument('--input_size', default=256, type=int,
                         help='images input size')
+    parser.add_argument('--crop_scale_min', default=0.2, type=float,
+                        help='Lower bound for RandomResizedCrop scale range')
+    parser.add_argument('--crop_scale_max', default=1.0, type=float,
+                        help='Upper bound for RandomResizedCrop scale range')
 
     parser.add_argument('--mask_ratio', default=0.75, type=float,
                         help='Masking ratio (percentage of removed patches).')
@@ -81,6 +85,8 @@ def get_args_parser():
                         help='path where to tensorboard log')
     parser.add_argument('--save_intermediate', action='store_true')
     parser.add_argument('--checkpoint_every', default=20, type=int)
+    parser.add_argument('--color_jitter', action='store_true',
+                        help='Apply a small color jitter augmentation to training images')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
@@ -123,12 +129,27 @@ def main(args):
 
     cudnn.benchmark = True
 
+    if args.crop_scale_min <= 0:
+        raise ValueError("--crop_scale_min must be positive")
+    if args.crop_scale_min > args.crop_scale_max:
+        raise ValueError("--crop_scale_min must be less than or equal to --crop_scale_max")
+
     # simple augmentation
-    transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    transform_list = [
+        transforms.RandomResizedCrop(
+            args.input_size,
+            scale=(args.crop_scale_min, args.crop_scale_max),
+            interpolation=3,  # 3 is bicubic
+        ),
+    ]
+    if args.color_jitter:
+        transform_list.append(transforms.ColorJitter(0.1, 0.1, 0.1, 0.1))
+    transform_list.extend([
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    transform_train = transforms.Compose(transform_list)
     dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
     print(dataset_train)
 
