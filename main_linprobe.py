@@ -59,6 +59,13 @@ def get_args_parser():
     parser.add_argument('--blr', type=float, default=0.1, metavar='LR',
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
 
+    parser.add_argument('--crop_scale_min', default=0.2, type=float,
+                        help='Lower bound for RandomResizedCrop scale range')
+    parser.add_argument('--crop_scale_max', default=1.0, type=float,
+                        help='Upper bound for RandomResizedCrop scale range')
+    parser.add_argument('--color_jitter', action='store_true',
+                        help='Apply a small color jitter augmentation to training images')
+
     parser.add_argument('--min_lr', type=float, default=0., metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
@@ -129,15 +136,25 @@ def main(args):
 
     cudnn.benchmark = True
 
-    # linear probe: weak augmentation
-    transform_train = transforms.Compose([
-            RandomResizedCrop(224, interpolation=3),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    # simple augmentation
+    transform_list = [
+        transforms.RandomResizedCrop(
+            args.input_size,
+            scale=(args.crop_scale_min, args.crop_scale_max),
+            interpolation=3,  # 3 is bicubic
+        ),
+    ]
+    if args.color_jitter:
+        transform_list.append(transforms.ColorJitter(0.1, 0.1, 0.1, 0.1))
+    transform_list.extend([
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    transform_train = transforms.Compose(transform_list)
     transform_val = transforms.Compose([
             transforms.Resize(256, interpolation=3),
-            transforms.CenterCrop(224),
+            transforms.CenterCrop(256),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)

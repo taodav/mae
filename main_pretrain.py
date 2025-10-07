@@ -53,6 +53,8 @@ def get_args_parser():
                         help='Lower bound for RandomResizedCrop scale range')
     parser.add_argument('--crop_scale_max', default=1.0, type=float,
                         help='Upper bound for RandomResizedCrop scale range')
+    parser.add_argument('--color_jitter', action='store_true',
+                        help='Apply a small color jitter augmentation to training images')
 
     parser.add_argument('--mask_ratio', default=0.75, type=float,
                         help='Masking ratio (percentage of removed patches).')
@@ -80,13 +82,11 @@ def get_args_parser():
                         help='dataset path')
 
     parser.add_argument('--output_dir', default='./output',
-                        help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='./logs',
-                        help='path where to tensorboard log')
+                        help='parent directory path where to save, empty for no saving')
+    parser.add_argument('--experiment_name', default='exp_name',
+                        help='experiment name. Used to save output into output_dir / experiment_name')
     parser.add_argument('--save_intermediate', action='store_true')
     parser.add_argument('--checkpoint_every', default=20, type=int)
-    parser.add_argument('--color_jitter', action='store_true',
-                        help='Apply a small color jitter augmentation to training images')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
@@ -105,6 +105,15 @@ def get_args_parser():
 
 
 def main(args):
+    experiment_dir, ckpt_dir, log_dir = None, None, None
+    if args.output_dir is not None:
+        experiment_dir = Path(args.output_dir) / args.experiment_name
+        experiment_dir.mkdir(exist_ok=True, parents=True)
+
+        ckpt_dir = experiment_dir / 'checkpoints'
+        log_dir = experiment_dir / 'logs'
+        ckpt_dir.mkdir(exist_ok=True), log_dir.mkdir(exist_ok=True)
+
     torch.serialization.add_safe_globals([argparse.Namespace])
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
@@ -143,9 +152,9 @@ def main(args):
     dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
     print(dataset_train)
 
-    if args.log_dir is not None:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
+    if log_dir is not None:
+        os.makedirs(log_dir, exist_ok=True)
+        log_writer = SummaryWriter(log_dir=log_dir)
     else:
         log_writer = None
 
@@ -200,23 +209,23 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and args.save_intermediate and (epoch % args.checkpoint_every == 0):
+        if ckpt_dir and args.save_intermediate and (epoch % args.checkpoint_every == 0):
             misc.save_model(
-                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                ckpt_dir=ckpt_dir, args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                         'epoch': epoch,}
 
-        if args.output_dir and misc.is_main_process():
+        if experiment_dir and misc.is_main_process():
             if log_writer is not None:
                 log_writer.flush()
-            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+            with open(os.path.join(experiment_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
     else:
-        if args.output_dir:
+        if ckpt_dir:
             misc.save_model(
-                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                ckpt_dir=ckpt_dir, args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
 
     total_time = time.time() - start_time
