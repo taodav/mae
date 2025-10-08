@@ -59,12 +59,8 @@ def get_args_parser():
     parser.add_argument('--blr', type=float, default=0.1, metavar='LR',
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
 
-    parser.add_argument('--crop_scale_min', default=0.2, type=float,
-                        help='Lower bound for RandomResizedCrop scale range')
-    parser.add_argument('--crop_scale_max', default=1.0, type=float,
-                        help='Upper bound for RandomResizedCrop scale range')
-    parser.add_argument('--color_jitter', action='store_true',
-                        help='Apply a small color jitter augmentation to training images')
+    parser.add_argument('--input_size', default=256, type=int,
+                        help='images input size')
 
     parser.add_argument('--min_lr', type=float, default=0., metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
@@ -133,16 +129,24 @@ def main(args):
 
     cudnn.benchmark = True
 
+    checkpoint = None
+    loaded_args = args
+    if args.finetune and not args.eval:
+        torch.serialization.add_safe_globals([argparse.Namespace])
+        checkpoint = torch.load(args.finetune, map_location='cpu')
+        loaded_args = checkpoint['args']
+
     # simple augmentation
     transform_list = [
         transforms.RandomResizedCrop(
-            args.input_size,
-            scale=(args.crop_scale_min, args.crop_scale_max),
+            256,
+            scale=(loaded_args.crop_scale_min, loaded_args.crop_scale_max),
             interpolation=3,  # 3 is bicubic
         ),
     ]
-    if args.color_jitter:
+    if loaded_args.color_jitter:
         transform_list.append(transforms.ColorJitter(0.1, 0.1, 0.1, 0.1))
+
     transform_list.extend([
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
@@ -190,10 +194,7 @@ def main(args):
         global_pool=args.global_pool,
     )
 
-    if args.finetune and not args.eval:
-        torch.serialization.add_safe_globals([argparse.Namespace])
-        checkpoint = torch.load(args.finetune, map_location='cpu')
-
+    if checkpoint is not None and not args.eval:
         print("Load pre-trained checkpoint from: %s" % args.finetune)
         checkpoint_model = checkpoint['model']
         state_dict = model.state_dict()
