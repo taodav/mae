@@ -167,9 +167,9 @@ def main(args):
     sampler_train = torch.utils.data.RandomSampler(dataset_train)
     sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-    if global_rank == 0 and args.log_dir is not None and not args.eval:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
+    if global_rank == 0 and log_dir is not None and not args.eval:
+        os.makedirs(log_dir, exist_ok=True)
+        log_writer = SummaryWriter(log_dir=log_dir)
     else:
         log_writer = None
 
