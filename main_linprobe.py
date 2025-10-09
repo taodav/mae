@@ -192,6 +192,7 @@ def main(args):
     model = models_vit.__dict__[args.model](
         num_classes=args.nb_classes,
         global_pool=args.global_pool,
+        img_size=args.input_size
     )
 
     if checkpoint is not None and not args.eval:
