@@ -274,7 +274,7 @@ def main(args):
             args=args
         )
         if ckpt_dir and args.save_intermediate and epoch % args.checkpoint_every == 0:
-            misc.save_model(
+            misc.save_model(ckpt_dir,
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
 
@@ -300,7 +300,7 @@ def main(args):
                 f.write(json.dumps(log_stats) + "\n")
     else:
         if ckpt_dir:
-            misc.save_model(
+            misc.save_model(ckpt_dir,
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
 
